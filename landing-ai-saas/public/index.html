@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LandingAI — مولّد صفحات الهبوط بالذكاء الاصطناعي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ======== TOP BAR ======== -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">L</div>
+    <span>LandingAI</span>
+  </div>
+  <div class="user-area" id="userArea" style="display:none">
+    <span class="plan-badge" id="planBadge"></span>
+    <span class="usage-badge" id="usageBadge"></span>
+    <button class="btn-ghost btn-upgrade" id="upgradeBtn">⭐ ترقية</button>
+    <button class="btn-ghost" id="logoutBtn">تسجيل الخروج</button>
+  </div>
+</header>
+
+<!-- ======== AUTH SCREEN ======== -->
+<main id="screen-auth" class="screen">
+  <div class="auth-wrap">
+    <div class="brand" style="justify-content:center;margin-bottom:24px">
+      <div class="brand-logo">L</div><span>LandingAI</span>
+    </div>
+    <div class="card auth-card">
+      <h3 style="margin-bottom:6px">تسجيل الدخول</h3>
+      <p class="hint">استخدم البريد الإلكتروني الذي اشتريت به المنتج.</p>
+
+      <div id="authError" class="auth-error" style="display:none"></div>
+
+      <div class="field">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="authEmail" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>كلمة المرور</label>
+        <input type="password" id="authPassword">
+      </div>
+
+      <button class="btn-generate" id="authSubmitBtn">دخول</button>
+      <p style="text-align:center;margin-top:14px">
+        <a href="#" id="forgotPasswordLink" style="color:var(--primary);font-size:.85rem">نسيت كلمة المرور؟</a>
+      </p>
+      <p style="text-align:center;margin-top:8px;color:var(--text-dim);font-size:.8rem">
+        لم تشترِ المنتج بعد؟ <a href="#" style="color:var(--primary)">اطلبه من هنا</a>
+      </p>
+    </div>
+  </div>
+</main>
+
+<!-- ======== SCREEN 1: DASHBOARD / INPUT ======== -->
+<main id="screen-dashboard" class="screen">
+  <div class="container">
+    <div class="hero-text">
+      <h1>حوّل أي منتج إلى صفحة هبوط احترافية <span>خلال دقائق</span></h1>
+      <p>أدخل بيانات منتجك، وسيقوم الذكاء الاصطناعي بتحليله وكتابة نسخة تسويقية كاملة وبناء الصفحة تلقائياً.</p>
+    </div>
+
+    <div class="card form-card">
+      <div class="tabs" id="inputTabs">
+        <button class="tab active" data-tab="link">🔗 رابط المنتج</button>
+        <button class="tab" data-tab="name">🏷️ اسم المنتج</button>
+        <button class="tab" data-tab="desc">📝 وصف المنتج</button>
+        <button class="tab" data-tab="image">🖼️ صورة المنتج</button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="tab-panel active" data-panel="link">
+          <input type="url" id="productLink" placeholder="https://example.com/product">
+        </div>
+        <div class="tab-panel" data-panel="name">
+          <input type="text" id="productName" placeholder="مثال: سماعة بلوتوث لاسلكية X200">
+        </div>
+        <div class="tab-panel" data-panel="desc">
+          <textarea id="productDesc" rows="4" placeholder="اكتب وصفاً تفصيلياً للمنتج، مميزاته، وما يحله من مشاكل..."></textarea>
+        </div>
+        <div class="tab-panel" data-panel="image">
+          <label class="upload-box" id="uploadBox">
+            <input type="file" id="productImage" accept="image/*" hidden>
+            <span id="uploadLabel">📤 اضغط لرفع صورة المنتج</span>
+            <img id="imagePreview" style="display:none">
+          </label>
+        </div>
+      </div>
+
+      <textarea id="extraNotes" rows="2" placeholder="ملاحظات إضافية (اختياري): جمهور مستهدف، نبرة تسويقية معينة..."></textarea>
+
+      <div class="grid-3">
+        <div class="field">
+          <label>السعر</label>
+          <input type="number" id="price" placeholder="49.99">
+        </div>
+        <div class="field">
+          <label>العملة</label>
+          <select id="currency">
+            <option value="USD">USD $</option>
+            <option value="SAR">SAR ر.س</option>
+            <option value="EUR">EUR €</option>
+            <option value="AED">AED د.إ</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>نوع الاشتراك</label>
+          <select id="billingType">
+            <option value="onetime">مرة واحدة</option>
+            <option value="monthly">شهري</option>
+            <option value="yearly">سنوي</option>
+            <option value="lifetime">مدى الحياة</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>رابط الشراء</label>
+          <input type="url" id="purchaseLink" placeholder="https://jvzoo.com/your-product">
+        </div>
+        <div class="field">
+          <label>لغة الصفحة</label>
+          <select id="pageLang">
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-generate" id="generateBtn">✨ Generate Landing Page</button>
+    </div>
+  </div>
+</main>
+
+<!-- ======== SCREEN 2: PROGRESS ======== -->
+<main id="screen-progress" class="screen">
+  <div class="progress-wrap">
+    <h2>جاري إنشاء صفحتك...</h2>
+    <div class="progress-bar-outer">
+      <div class="progress-bar-inner" id="progressBarInner"></div>
+    </div>
+    <div class="steps-list" id="stepsList">
+      <div class="step-item" data-step="1"><span class="step-icon">1</span><span>تحليل البيانات المدخلة</span></div>
+      <div class="step-item" data-step="2"><span class="step-icon">2</span><span>فهم المنتج والجمهور المستهدف</span></div>
+      <div class="step-item" data-step="3"><span class="step-icon">3</span><span>كتابة النسخة التسويقية</span></div>
+      <div class="step-item" data-step="4"><span class="step-icon">4</span><span>توليد العناصر البصرية</span></div>
+      <div class="step-item" data-step="5"><span class="step-icon">5</span><span>بناء صفحة الهبوط</span></div>
+      <div class="step-item" data-step="6"><span class="step-icon">6</span><span>إنشاء الصفحات القانونية</span></div>
+      <div class="step-item" data-step="7"><span class="step-icon">7</span><span>تجهيز المعاينة</span></div>
+    </div>
+  </div>
+</main>
+
+<!-- ======== SCREEN 3: EDITOR / PREVIEW ======== -->
+<main id="screen-editor" class="screen editor-screen">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h3>🎨 أدوات التعديل</h3>
+      <button class="btn-back" id="backBtn">← رجوع</button>
+    </div>
+
+    <div class="sidebar-section">
+      <label>اللون الأساسي</label>
+      <input type="color" id="primaryColorPicker" value="#6366f1">
+    </div>
+
+    <div class="sidebar-section">
+      <label>الخط</label>
+      <select id="fontPicker">
+        <option value="'Inter', sans-serif">Inter</option>
+        <option value="'Poppins', sans-serif">Poppins</option>
+        <option value="'Cairo', sans-serif">Cairo (عربي)</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <label>ترتيب/إظهار الأقسام</label>
+      <ul class="section-list" id="sectionOrderList"></ul>
+    </div>
+
+    <div class="sidebar-section">
+      <label>وضع التعديل المباشر</label>
+      <button class="btn-secondary full" id="toggleEditMode">✏️ تفعيل تعديل النصوص</button>
+    </div>
+
+    <div class="sidebar-section">
+      <button class="btn-primary full" id="improveAiBtn">🚀 Improve with AI</button>
+    </div>
+
+    <div class="sidebar-section">
+      <label>طلب تعديل مخصص</label>
+      <textarea id="customInstruction" rows="3" placeholder="Describe what you want to change..."></textarea>
+      <button class="btn-primary full" id="regenerateBtn">🔄 Regenerate</button>
+    </div>
+
+    <div class="sidebar-section">
+      <button class="btn-secondary full" id="viewLegalBtn">📄 الصفحات القانونية</button>
+      <button class="btn-success full" id="exportBtn">⬇️ تصدير الصفحة (HTML)</button>
+    </div>
+  </aside>
+
+  <div class="preview-area">
+    <div class="preview-topbar">
+      <div class="viewport-toggle">
+        <button class="vt-btn active" data-view="desktop">🖥️</button>
+        <button class="vt-btn" data-view="tablet">📱</button>
+        <button class="vt-btn" data-view="mobile">📲</button>
+      </div>
+      <span id="loadingIndicator" class="loading-badge" style="display:none">⏳ جاري التحديث...</span>
+    </div>
+    <div class="preview-frame-wrap" id="frameWrap">
+      <iframe id="previewFrame"></iframe>
+    </div>
+  </div>
+</main>
+
+<!-- ======== LEGAL MODAL ======== -->
+<div class="modal-overlay" id="legalModal">
+  <div class="modal modal-lg">
+    <div class="legal-tabs">
+      <button class="tab active" data-legal="privacy">Privacy Policy</button>
+      <button class="tab" data-legal="terms">Terms of Service</button>
+      <button class="tab" data-legal="disclaimer">Disclaimer</button>
+    </div>
+    <textarea id="legalEditor" rows="18"></textarea>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="closeLegal">إغلاق</button>
+      <button class="btn-primary" id="saveLegal">حفظ التعديل</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== UPGRADE MODAL ======== -->
+<div class="modal-overlay" id="upgradeModal">
+  <div class="modal modal-lg">
+    <h3>⭐ اختر خطتك</h3>
+    <div class="plans-grid" id="plansGrid"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="closeUpgrade">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<script src="template-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
