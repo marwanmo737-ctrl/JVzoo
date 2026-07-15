@@ -196,71 +196,104 @@ document.getElementById("upgradeBtn").onclick = () => {
   renderPlansGrid();
   toggleModal("upgradeModal", true);
 };
+// closeUpgrade is now the modal-close X button inside the upgrade modal header
 document.getElementById("closeUpgrade").onclick = () => toggleModal("upgradeModal", false);
 
 function toggleModal(id, show){ document.getElementById(id).classList.toggle("active", show); }
 
 /* ============================================================
-   INPUT TABS
+   SMART INPUT — type chips + image upload + notes toggle + examples
    ============================================================ */
-
-document.querySelectorAll("#inputTabs .tab").forEach(tab => {
-  tab.onclick = () => {
-    document.querySelectorAll("#inputTabs .tab").forEach(t=>t.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
-    tab.classList.add("active");
-    document.querySelector(`.tab-panel[data-panel="${tab.dataset.tab}"]`).classList.add("active");
-  };
-});
 
 let uploadedImageBase64 = null;
 let uploadedImageMime = null;
 
+// Type chips (visual only — actual type is auto-detected on submit)
+document.querySelectorAll(".input-type-chip").forEach(chip => {
+  chip.onclick = () => {
+    document.querySelectorAll(".input-type-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+  };
+});
+
+// Image upload
 document.getElementById("productImage").onchange = (e) => {
   const file = e.target.files[0];
-  if(!file) return;
+  if (!file) return;
   uploadedImageMime = file.type;
   const reader = new FileReader();
   reader.onload = (ev) => {
     uploadedImageBase64 = ev.target.result.split(",")[1];
     document.getElementById("imagePreview").src = ev.target.result;
-    document.getElementById("imagePreview").style.display = "block";
-    document.getElementById("uploadLabel").style.display = "none";
+    document.getElementById("imagePreviewWrap").style.display = "inline-block";
+    // switch chip to image
+    document.querySelectorAll(".input-type-chip").forEach(c => c.classList.remove("active"));
+    document.querySelector('.input-type-chip[data-type="image"]').classList.add("active");
   };
   reader.readAsDataURL(file);
 };
+
+document.getElementById("removeImageBtn").onclick = () => {
+  uploadedImageBase64 = null;
+  uploadedImageMime = null;
+  document.getElementById("productImage").value = "";
+  document.getElementById("imagePreviewWrap").style.display = "none";
+  document.querySelectorAll(".input-type-chip").forEach(c => c.classList.remove("active"));
+  document.querySelector('.input-type-chip[data-type="auto"]').classList.add("active");
+};
+
+// Notes toggle
+document.getElementById("notesToggleBtn").onclick = () => {
+  const area = document.getElementById("notesArea");
+  const isHidden = area.style.display === "none";
+  area.style.display = isHidden ? "block" : "none";
+  document.getElementById("notesToggleBtn").style.color = isHidden ? "var(--primary)" : "";
+};
+
+// Example chips
+document.querySelectorAll(".example-chip").forEach(chip => {
+  chip.onclick = () => {
+    document.getElementById("smartInput").value = chip.dataset.example;
+    document.getElementById("smartInput").focus();
+  };
+});
 
 /* ============================================================
    GENERATE FLOW
    ============================================================ */
 
-document.getElementById("generateBtn").onclick = async () => {
-  const activeTab = document.querySelector("#inputTabs .tab.active").dataset.tab;
-  let inputValue = "";
-  if(activeTab === "link") inputValue = document.getElementById("productLink").value;
-  if(activeTab === "name") inputValue = document.getElementById("productName").value;
-  if(activeTab === "desc") inputValue = document.getElementById("productDesc").value;
+// Detect input type from value
+function detectInputType(value) {
+  if (!value && uploadedImageBase64) return "image";
+  if (/^https?:\/\//i.test(value.trim())) return "link";
+  if (value.trim().split(/\s+/).length <= 6) return "name";
+  return "desc";
+}
 
-  if(activeTab !== "image" && !inputValue.trim()){
-    alert("يرجى إدخال بيانات المنتج");
+document.getElementById("generateBtn").onclick = async () => {
+  const rawInput = document.getElementById("smartInput").value.trim();
+  const hasImage = !!uploadedImageBase64;
+
+  if (!rawInput && !hasImage) {
+    document.getElementById("smartInput").focus();
+    document.getElementById("inputCard").style.borderColor = "rgba(239,68,68,.5)";
+    setTimeout(() => document.getElementById("inputCard").style.borderColor = "", 1500);
     return;
   }
-  if(activeTab === "image" && !uploadedImageBase64){
-    alert("يرجى رفع صورة المنتج");
-    return;
-  }
+
+  const detectedType = detectInputType(rawInput);
 
   const payload = {
-    inputType: activeTab,
-    inputValue,
-    imageBase64: activeTab === "image" ? uploadedImageBase64 : undefined,
-    imageMimeType: activeTab === "image" ? uploadedImageMime : undefined,
-    extraNotes: document.getElementById("extraNotes").value,
-    price: document.getElementById("price").value || "0",
-    currency: document.getElementById("currency").value,
-    billingType: document.getElementById("billingType").value,
+    inputType:    detectedType,
+    inputValue:   rawInput,
+    imageBase64:  hasImage ? uploadedImageBase64 : undefined,
+    imageMimeType: hasImage ? uploadedImageMime : undefined,
+    extraNotes:   document.getElementById("extraNotes").value,
+    price:        document.getElementById("price").value || "0",
+    currency:     document.getElementById("currency").value,
+    billingType:  document.getElementById("billingType").value,
     purchaseLink: document.getElementById("purchaseLink").value || "#",
-    lang: document.getElementById("pageLang").value
+    lang:         document.getElementById("pageLang").value
   };
   state.lang = payload.lang;
 
@@ -485,6 +518,7 @@ document.getElementById("viewLegalBtn").onclick = () => {
   toggleModal("legalModal", true);
 };
 document.getElementById("closeLegal").onclick = () => toggleModal("legalModal", false);
+document.getElementById("closeLegalBottom").onclick = () => toggleModal("legalModal", false);
 document.querySelectorAll(".legal-tabs .tab").forEach(tab => {
   tab.onclick = () => {
     document.querySelectorAll(".legal-tabs .tab").forEach(t=>t.classList.remove("active"));
