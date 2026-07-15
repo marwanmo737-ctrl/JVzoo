@@ -112,30 +112,49 @@
         </div>
       </div>
 
-      <!-- Options row -->
+      <!-- Options grid — 4 clean fields -->
       <div class="input-options">
-        <div class="option-group">
-          <div class="mini-field">
-            <input type="number" id="price" placeholder="السعر" min="0" step="0.01">
-          </div>
-          <select id="currency" class="mini-select">
-            <option value="USD">USD $</option>
-            <option value="SAR">SAR ر.س</option>
-            <option value="EUR">EUR €</option>
-            <option value="AED">AED د.إ</option>
-          </select>
-          <select id="billingType" class="mini-select">
+        <!-- Price -->
+        <div class="input-field">
+          <label class="field-label">السعر</label>
+          <input type="number" id="price" placeholder="مثلاً: 99" min="0" step="0.01" class="field-input">
+        </div>
+        
+        <!-- Billing type -->
+        <div class="input-field">
+          <label class="field-label">نوع الدفع</label>
+          <select id="billingType" class="field-select">
             <option value="onetime">مرة واحدة</option>
             <option value="monthly">شهري</option>
             <option value="yearly">سنوي</option>
             <option value="lifetime">مدى الحياة</option>
           </select>
         </div>
-        <div class="option-group">
-          <input type="url" id="purchaseLink" class="mini-field-url" placeholder="رابط الشراء (اختياري)">
-          <select id="pageLang" class="mini-select">
-            <option value="ar">العربية</option>
-            <option value="en">English</option>
+        
+        <!-- Guarantee period -->
+        <div class="input-field">
+          <label class="field-label">مدة الضمان</label>
+          <select id="guaranteePeriod" class="field-select">
+            <option value="none">بدون ضمان</option>
+            <option value="7days">7 أيام</option>
+            <option value="14days">14 يوم</option>
+            <option value="30days">30 يوم</option>
+            <option value="60days">60 يوم</option>
+            <option value="90days">90 يوم</option>
+            <option value="lifetime">مدى الحياة</option>
+          </select>
+        </div>
+        
+        <!-- Product category (optional but useful) -->
+        <div class="input-field">
+          <label class="field-label">فئة المنتج</label>
+          <select id="category" class="field-select">
+            <option value="software">برنامج / SaaS</option>
+            <option value="physical">منتج مادي</option>
+            <option value="digital">منتج رقمي</option>
+            <option value="service">خدمة</option>
+            <option value="course">دورة تدريبية</option>
+            <option value="other">أخرى</option>
           </select>
         </div>
       </div>

@@ -284,18 +284,18 @@ document.getElementById("generateBtn").onclick = async () => {
   const detectedType = detectInputType(rawInput);
 
   const payload = {
-    inputType:    detectedType,
-    inputValue:   rawInput,
-    imageBase64:  hasImage ? uploadedImageBase64 : undefined,
-    imageMimeType: hasImage ? uploadedImageMime : undefined,
-    extraNotes:   document.getElementById("extraNotes").value,
-    price:        document.getElementById("price").value || "0",
-    currency:     document.getElementById("currency").value,
-    billingType:  document.getElementById("billingType").value,
-    purchaseLink: document.getElementById("purchaseLink").value || "#",
-    lang:         document.getElementById("pageLang").value
+    inputType:       detectedType,
+    inputValue:      rawInput,
+    imageBase64:     hasImage ? uploadedImageBase64 : undefined,
+    imageMimeType:   hasImage ? uploadedImageMime : undefined,
+    price:           document.getElementById("price").value || "0",
+    billingType:     document.getElementById("billingType").value,
+    guaranteePeriod: document.getElementById("guaranteePeriod").value,
+    category:        document.getElementById("category").value,
+    extraNotes:      document.getElementById("extraNotes").value,
+    lang:            "ar"
   };
-  state.lang = payload.lang;
+  state.lang = "ar";
 
   switchScreen("screen-progress");
   runProgressUI();
