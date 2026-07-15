@@ -1,0 +1,130 @@
+const express = require("express");
+const router = express.Router();
+const crypto = require("crypto");
+
+const db = require("../db/database");
+const { hashPassword } = require("../services/authService");
+const { generateLicenseKey, generateTempPassword, generateSecureToken } = require("../services/licenseService");
+const { sendWelcomeEmail, sendUpsellConfirmationEmail } = require("../services/emailService");
+const { getPlanByProductId } = require("../config/plans");
+
+function verifyJVzooSignature(body) {
+  const secretKey = process.env.JVZOO_SECRET_KEY;
+  const receivedVerify = body.cverify;
+  if (!receivedVerify || !secretKey) return false;
+
+  // JVZoo's reference algorithm appends "|" after EVERY field (including
+  // the last one) before appending the secret key — it is NOT a plain
+  // join("|") between fields, which omits the trailing pipe and produces
+  // a hash that never matches JVZoo's real cverify value.
+  const fieldsToVerify = Object.keys(body)
+    .filter(k => k !== "cverify")
+    .sort()
+    .map(k => `${body[k]}|`)
+    .join("");
+
+  const computedHash = crypto
+    .createHash("sha1")
+    .update(fieldsToVerify + secretKey)
+    .digest("hex")
+    .toUpperCase()
+    .slice(0, 8);
+
+  const received = String(receivedVerify).toUpperCase();
+  const computedBuf = Buffer.from(computedHash, "utf8");
+  const receivedBuf = Buffer.from(received, "utf8");
+  if (computedBuf.length !== receivedBuf.length) return false;
+  return crypto.timingSafeEqual(computedBuf, receivedBuf);
+}
+
+router.post("/jvzoo", express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    const body = req.body;
+
+    if (!verifyJVzooSignature(body)) {
+      console.warn("⚠️ JVzoo webhook: توقيع غير صالح");
+      return res.status(403).send("Invalid signature");
+    }
+
+    const transactionType = body.ctransaction;
+    const transactionId = body.ctransreceipt;
+    const buyerEmail = body.ccustemail;
+    const buyerName = body.ccustname || "";
+    const productId = body.cproditem;
+
+    if (transactionType === "RFND" || transactionType === "CGBK") {
+      db.revokeLicenseByTransactionId(transactionId);
+      const license = db.getLicenseByTransactionId(transactionId);
+      if (license) {
+        const remainingPlan = db.getHighestActivePlanForUser(license.user_id);
+        db.updatePlan(license.user_id, remainingPlan || "none");
+      }
+      console.log(`🔴 تم إلغاء ترخيص العملية ${transactionId}`);
+      return res.status(200).send("OK");
+    }
+
+    if (transactionType === "SALE" || transactionType === "BILL") {
+      const existing = db.getLicenseByTransactionId(transactionId);
+      if (existing) return res.status(200).send("OK - Already processed");
+
+      const plan = getPlanByProductId(productId);
+      if (!plan) {
+        console.error(`❌ Product ID غير معروف: ${productId}`);
+        return res.status(400).send("Unknown product ID");
+      }
+
+      const licenseKey = generateLicenseKey();
+      let user = db.getUserByEmail(buyerEmail);
+      const isNewUser = !user;
+
+      if (isNewUser) {
+        const tempPassword = generateTempPassword();
+        const passwordHash = await hashPassword(tempPassword);
+        user = db.createUser({ email: buyerEmail, passwordHash, fullName: buyerName, plan: plan.id, mustSetPassword: 1 });
+      }
+
+      db.createLicense({ licenseKey, userId: user.id, planId: plan.id, jvzooTransactionId: transactionId, productId });
+
+      const highestPlan = db.getHighestActivePlanForUser(user.id);
+      db.updatePlan(user.id, highestPlan);
+
+      if (isNewUser) {
+        const resetToken = generateSecureToken();
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        db.createResetToken(user.id, resetToken, expiresAt);
+
+        const setPasswordLink = `${process.env.APP_URL}/set-password.html?token=${resetToken}`;
+        try {
+          await sendWelcomeEmail({ to: buyerEmail, fullName: buyerName, licenseKey, planLabel: plan.label, setPasswordLink });
+          console.log(`✅ حساب جديد: ${buyerEmail} — خطة: ${plan.label} — ترخيص: ${licenseKey}`);
+        } catch (emailErr) {
+          // The account/license are already committed above. If we let this
+          // throw reach the outer catch, we'd return 500 and JVZoo would
+          // retry — but the retry hits the "already processed" short-circuit
+          // at the top of this handler and returns 200 without ever trying
+          // to send the email again, so the customer would silently never
+          // receive their activation link. Surface it loudly instead so a
+          // human can resend it, but still tell JVZoo the sale was handled.
+          console.error(`‼️ فشل إرسال إيميل التفعيل لـ ${buyerEmail} (ترخيص ${licenseKey}) — يتطلب إعادة إرسال يدوي:`, emailErr);
+        }
+      } else {
+        try {
+          await sendUpsellConfirmationEmail({ to: buyerEmail, planLabel: plan.label, newQuota: plan.monthlyQuota });
+          console.log(`✅ ترقية خطة لمستخدم موجود: ${buyerEmail} → ${plan.label}`);
+        } catch (emailErr) {
+          console.error(`‼️ فشل إرسال إيميل ترقية الخطة لـ ${buyerEmail} — يتطلب إعادة إرسال يدوي:`, emailErr);
+        }
+      }
+
+      return res.status(200).send("OK");
+    }
+
+    res.status(200).send("OK - Ignored");
+
+  } catch (err) {
+    console.error("❌ خطأ في معالجة JVzoo webhook:", err);
+    res.status(500).send("Internal error");
+  }
+});
+
+module.exports = router;
