@@ -4,6 +4,37 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TEXT_MODEL = "llama-3.3-70b-versatile";
 const VISION_MODEL = "llama-3.2-11b-vision-preview";
 
+/* ============================================================
+   Safe JSON parser — handles:
+   1. Markdown code fences (```json ... ```) Groq sometimes wraps
+   2. Leading/trailing whitespace or BOM characters
+   3. Embedded JSON object/array when there is surrounding text
+   ============================================================ */
+function safeParseJSON(raw) {
+  if (!raw) throw new Error("Groq returned an empty response");
+  let text = raw.trim();
+
+  // Strip markdown code fences
+  const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/);
+  if (fenceMatch) text = fenceMatch[1].trim();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Last-resort: extract the first {...} or [...] block from the text
+    const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[1]);
+      } catch { /* fall through */ }
+    }
+    throw new Error(`Groq returned invalid JSON. Preview: ${text.slice(0, 300)}`);
+  }
+}
+
+/* ============================================================
+   Core fetch — one attempt, no retry
+   ============================================================ */
 async function callGroq(messages, { jsonMode = true, model = TEXT_MODEL } = {}) {
   const res = await fetch(GROQ_URL, {
     method: "POST",
@@ -28,8 +59,35 @@ async function callGroq(messages, { jsonMode = true, model = TEXT_MODEL } = {}) 
   return data.choices[0].message.content;
 }
 
+/* ============================================================
+   Retry wrapper — exponential back-off on transient errors
+   (429 rate-limit, 500/503 server errors)
+   ============================================================ */
+async function callGroqWithRetry(messages, options = {}, maxRetries = 3) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await callGroq(messages, options);
+    } catch (err) {
+      lastErr = err;
+      const isTransient =
+        err.message.includes("429") ||
+        err.message.includes("503") ||
+        err.message.includes("500");
+      if (!isTransient || attempt === maxRetries) break;
+      // Exponential back-off: 1 s, 2 s
+      await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+    }
+  }
+  throw lastErr;
+}
+
+/* ============================================================
+   Public helpers
+   ============================================================ */
+
 async function analyzeProductImage(base64Image, mimeType) {
-  const content = await callGroq(
+  const content = await callGroqWithRetry(
     [
       {
         role: "user",
@@ -77,12 +135,12 @@ ${langInstruction}
 ${CONTENT_SCHEMA}
 `;
 
-  const raw = await callGroq([
+  const raw = await callGroqWithRetry([
     { role: "system", content: "أنت خبير تسويق عالمي متخصص في صفحات الهبوط عالية التحويل. ترجع دائماً JSON صالح 100% بدون أي شرح إضافي." },
     { role: "user", content: prompt }
   ]);
 
-  return JSON.parse(raw);
+  return safeParseJSON(raw);
 }
 
 async function generateLegalPages(content, lang) {
@@ -92,11 +150,11 @@ async function generateLegalPages(content, lang) {
 اكتب 3 صفحات قانونية احترافية ${langInstruction}.
 أرجع JSON فقط: {"privacy":"نص كامل", "terms":"نص كامل", "disclaimer":"نص كامل"}
 `;
-  const raw = await callGroq([
+  const raw = await callGroqWithRetry([
     { role: "system", content: "أنت مستشار قانوني متخصص في صياغة سياسات مواقع البيع الإلكتروني. أرجع JSON صحيح فقط." },
     { role: "user", content: prompt }
   ]);
-  return JSON.parse(raw);
+  return safeParseJSON(raw);
 }
 
 async function regenerateContent(currentContent, instruction, lang) {
@@ -109,11 +167,11 @@ ${JSON.stringify(currentContent)}
 نفّذ التعديل المطلوب فقط وحافظ على بقية الحقول كما هي.
 ${CONTENT_SCHEMA}
 `;
-  const raw = await callGroq([
+  const raw = await callGroqWithRetry([
     { role: "system", content: "أنت محرر محتوى تسويقي محترف. تعدّل فقط ما يُطلب. أرجع JSON صحيح كامل بنفس الهيكل." },
     { role: "user", content: prompt }
   ]);
-  return JSON.parse(raw);
+  return safeParseJSON(raw);
 }
 
 async function improveContent(currentContent, lang) {

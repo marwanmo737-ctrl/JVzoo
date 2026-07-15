@@ -13,12 +13,17 @@ function verifyJVzooSignature(body) {
   const receivedVerify = body.cverify;
   if (!receivedVerify || !secretKey) return false;
 
-  // JVZoo's reference algorithm appends "|" after EVERY field (including
-  // the last one) before appending the secret key — it is NOT a plain
-  // join("|") between fields, which omits the trailing pipe and produces
-  // a hash that never matches JVZoo's real cverify value.
+  // JVZoo reference algorithm:
+  //   1. Take all POST fields except `cverify`, sort alphabetically by key name.
+  //   2. Concatenate each value followed by "|" (trailing pipe on every field).
+  //   3. Append the secret key (no separator).
+  //   4. SHA-1 hex → uppercase → first 8 characters.
+  //
+  // Only include scalar string/number fields. Express body-parser may add
+  // prototype-inherited properties on edge-case inputs; guard with
+  // hasOwnProperty so we only hash what JVZoo actually sent.
   const fieldsToVerify = Object.keys(body)
-    .filter(k => k !== "cverify")
+    .filter(k => Object.prototype.hasOwnProperty.call(body, k) && k !== "cverify")
     .sort()
     .map(k => `${body[k]}|`)
     .join("");
@@ -30,11 +35,12 @@ function verifyJVzooSignature(body) {
     .toUpperCase()
     .slice(0, 8);
 
-  const received = String(receivedVerify).toUpperCase();
-  const computedBuf = Buffer.from(computedHash, "utf8");
-  const receivedBuf = Buffer.from(received, "utf8");
-  if (computedBuf.length !== receivedBuf.length) return false;
-  return crypto.timingSafeEqual(computedBuf, receivedBuf);
+  // Use timing-safe comparison to prevent timing-oracle attacks.
+  // Both sides are padded/truncated to exactly 8 chars, so the buffer
+  // lengths are always equal and timingSafeEqual won't throw.
+  const computed  = computedHash.padEnd(8, " ").slice(0, 8);
+  const received  = String(receivedVerify).toUpperCase().padEnd(8, " ").slice(0, 8);
+  return crypto.timingSafeEqual(Buffer.from(computed, "utf8"), Buffer.from(received, "utf8"));
 }
 
 router.post("/jvzoo", express.urlencoded({ extended: true }), async (req, res) => {
@@ -47,10 +53,23 @@ router.post("/jvzoo", express.urlencoded({ extended: true }), async (req, res) =
     }
 
     const transactionType = body.ctransaction;
-    const transactionId = body.ctransreceipt;
-    const buyerEmail = body.ccustemail;
-    const buyerName = body.ccustname || "";
-    const productId = body.cproditem;
+    const transactionId   = body.ctransreceipt;
+    const buyerEmail      = body.ccustemail;
+    const buyerName       = body.ccustname || "";
+    const productId       = body.cproditem;
+
+    // Guard against malformed or incomplete payloads — all five fields are
+    // required by JVZoo for every transaction notification.
+    if (!transactionType || !transactionId || !buyerEmail || !productId) {
+      console.warn("JVzoo webhook: missing required fields — payload rejected", {
+        transactionType, transactionId, buyerEmail, productId
+      });
+      return res.status(400).send("Missing required fields");
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
+      console.warn("JVzoo webhook: invalid buyer email —", buyerEmail);
+      return res.status(400).send("Invalid email");
+    }
 
     if (transactionType === "RFND" || transactionType === "CGBK") {
       db.revokeLicenseByTransactionId(transactionId);

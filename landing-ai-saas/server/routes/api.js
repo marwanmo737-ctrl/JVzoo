@@ -32,6 +32,21 @@ function persistPageUpdate(req, pageId, content) {
   return createPage({ userId: req.user.id, content, legal: null });
 }
 
+/* ===== GET /api/config (public — no auth required) =====
+ * Returns the JVZoo sales-page URLs so the frontend never has
+ * them hardcoded. Falls back to "#" when env vars are unset so
+ * the app still renders (buttons are just non-functional).
+ */
+router.get("/config", (req, res) => {
+  res.json({
+    plans: [
+      { id: "starter", salesUrl: process.env.JVZOO_SALES_URL_STARTER || "#" },
+      { id: "pro",     salesUrl: process.env.JVZOO_SALES_URL_PRO     || "#" },
+      { id: "agency",  salesUrl: process.env.JVZOO_SALES_URL_AGENCY   || "#" }
+    ]
+  });
+});
+
 router.use(requireAuth);
 
 /* ===== POST /api/generate ===== */

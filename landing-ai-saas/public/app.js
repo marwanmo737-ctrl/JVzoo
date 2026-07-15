@@ -6,6 +6,7 @@ let currentUser = null;
 
 let state = {
   content: null,
+  pageId: null,   // persisted DB row — sent on every regenerate/improve call
   design: {
     primaryColor: "#6366f1",
     font: "'Inter', sans-serif",
@@ -17,11 +18,28 @@ let state = {
   editMode: false
 };
 
+// salesUrl values start as "#" and are replaced by loadConfig() at boot.
+// This ensures links always reflect the real JVZoo product URLs from the
+// server environment instead of stale hardcoded placeholders.
 const PLANS_INFO = [
-  { id: "starter", label: "Starter", price: 47, quota: 20, salesUrl: "https://jvzoo.com/your-starter-link" },
-  { id: "pro", label: "Pro", price: 97, quota: 60, salesUrl: "https://jvzoo.com/your-pro-oto1-link" },
-  { id: "agency", label: "Agency", price: 197, quota: 150, salesUrl: "https://jvzoo.com/your-agency-oto2-link" }
+  { id: "starter", label: "Starter", price: 47,  quota: 20,  salesUrl: "#" },
+  { id: "pro",     label: "Pro",     price: 97,  quota: 60,  salesUrl: "#" },
+  { id: "agency",  label: "Agency",  price: 197, quota: 150, salesUrl: "#" }
 ];
+
+async function loadConfig() {
+  try {
+    const res = await fetch("/api/config");
+    if (!res.ok) return;
+    const { plans } = await res.json();
+    plans.forEach(({ id, salesUrl }) => {
+      const plan = PLANS_INFO.find(p => p.id === id);
+      if (plan && salesUrl && salesUrl !== "#") plan.salesUrl = salesUrl;
+    });
+  } catch {
+    // Silent — app stays functional with "#" fallback links
+  }
+}
 
 /* ============================================================
    AUTH
@@ -55,18 +73,73 @@ document.getElementById("authSubmitBtn").onclick = async () => {
   } catch(e){ showAuthError(e.message); }
 };
 
-document.getElementById("forgotPasswordLink").onclick = async (e) => {
+/* ============================================================
+   Forgot-password inline modal (replaces browser prompt())
+   ============================================================ */
+
+function buildForgotModal() {
+  if (document.getElementById("forgotModal")) return; // already built
+  const overlay = document.createElement("div");
+  overlay.id = "forgotModal";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <h3 style="margin-bottom:8px">استعادة كلمة المرور</h3>
+      <p class="hint" style="margin-bottom:16px">أدخل بريدك الإلكتروني المسجّل وسنرسل لك رابط إعادة التعيين.</p>
+      <div id="forgotMsg" class="auth-error" style="display:none"></div>
+      <div class="field">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="forgotEmail" placeholder="you@example.com">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="closeForgot">إلغاء</button>
+        <button class="btn-primary" id="forgotSubmit">إرسال الرابط</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById("closeForgot").onclick = () =>
+    toggleModal("forgotModal", false);
+
+  document.getElementById("forgotSubmit").onclick = async () => {
+    const email = document.getElementById("forgotEmail").value.trim();
+    const msgEl = document.getElementById("forgotMsg");
+    msgEl.style.display = "none";
+    if (!email) {
+      msgEl.textContent = "يرجى إدخال البريد الإلكتروني";
+      msgEl.style.display = "block";
+      return;
+    }
+    document.getElementById("forgotSubmit").disabled = true;
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      msgEl.style.color = res.ok ? "var(--success, #22c55e)" : "var(--danger, #ef4444)";
+      msgEl.textContent = data.message || (res.ok ? "تم الإرسال" : "حدث خطأ");
+      msgEl.style.display = "block";
+      if (res.ok) {
+        setTimeout(() => toggleModal("forgotModal", false), 3000);
+      }
+    } catch {
+      msgEl.textContent = "حدث خطأ، حاول لاحقاً.";
+      msgEl.style.display = "block";
+    } finally {
+      document.getElementById("forgotSubmit").disabled = false;
+    }
+  };
+}
+
+document.getElementById("forgotPasswordLink").onclick = (e) => {
   e.preventDefault();
-  const email = prompt("أدخل بريدك الإلكتروني المسجّل:");
-  if(!email) return;
-  try {
-    const res = await fetch("/api/auth/forgot-password", {
-      method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ email })
-    });
-    const data = await res.json();
-    alert(data.message);
-  } catch(e){ alert("حدث خطأ، حاول لاحقاً."); }
+  buildForgotModal();
+  document.getElementById("forgotEmail").value = "";
+  const msgEl = document.getElementById("forgotMsg");
+  if (msgEl) { msgEl.style.display = "none"; msgEl.style.color = ""; }
+  toggleModal("forgotModal", true);
 };
 
 document.getElementById("logoutBtn").onclick = async () => {
@@ -224,7 +297,8 @@ document.getElementById("generateBtn").onclick = async () => {
     await setStep(7, 300);
 
     state.content = data.content;
-    state.legal = data.legal;
+    state.legal   = data.legal;
+    state.pageId  = data.pageId;   // track DB row for future regenerate/improve
     currentUser.usageCount = data.usage.used;
     updateUsageBadge();
 
@@ -362,7 +436,7 @@ document.getElementById("improveAiBtn").onclick = async () => {
   try {
     const res = await fetch("/api/improve", {
       method: "POST", headers: {"Content-Type":"application/json"}, credentials: "include",
-      body: JSON.stringify({ content: state.content, lang: state.lang })
+      body: JSON.stringify({ content: state.content, lang: state.lang, pageId: state.pageId })
     });
     const data = await res.json();
     if(!res.ok){
@@ -370,6 +444,7 @@ document.getElementById("improveAiBtn").onclick = async () => {
       throw new Error(data.error);
     }
     state.content = data.content;
+    state.pageId  = data.pageId;   // update in case server assigned a new row
     currentUser.usageCount = data.usage.used;
     updateUsageBadge();
     renderPreview();
@@ -384,7 +459,7 @@ document.getElementById("regenerateBtn").onclick = async () => {
   try {
     const res = await fetch("/api/regenerate", {
       method: "POST", headers: {"Content-Type":"application/json"}, credentials: "include",
-      body: JSON.stringify({ content: state.content, instruction, lang: state.lang })
+      body: JSON.stringify({ content: state.content, instruction, lang: state.lang, pageId: state.pageId })
     });
     const data = await res.json();
     if(!res.ok){
@@ -392,6 +467,7 @@ document.getElementById("regenerateBtn").onclick = async () => {
       throw new Error(data.error);
     }
     state.content = data.content;
+    state.pageId  = data.pageId;   // update in case server assigned a new row
     currentUser.usageCount = data.usage.used;
     updateUsageBadge();
     renderPreview();
@@ -443,7 +519,13 @@ document.querySelectorAll(".vt-btn").forEach(btn => {
 });
 
 /* ===== Back & Export ===== */
-document.getElementById("backBtn").onclick = () => switchScreen("screen-dashboard");
+document.getElementById("backBtn").onclick = () => {
+  // Reset page-level state so a new generate starts fresh
+  state.content = null;
+  state.pageId  = null;
+  state.legal   = null;
+  switchScreen("screen-dashboard");
+};
 
 document.getElementById("exportBtn").onclick = () => {
   const doc = getFrameDoc();
@@ -458,4 +540,5 @@ document.getElementById("exportBtn").onclick = () => {
 /* ============================================================
    INIT
    ============================================================ */
+loadConfig();   // hydrate PLANS_INFO.salesUrl from server env vars
 checkSession();

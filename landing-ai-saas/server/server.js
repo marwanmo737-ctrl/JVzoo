@@ -52,6 +52,45 @@ app.use("/api/auth", authRoutes);
 app.use("/api", apiRoutes);
 
 app.use(express.static(path.join(__dirname, "../public")));
+
+// Only serve the SPA shell for non-API, non-webhook paths so that a
+// mis-typed or missing API route returns a JSON 404 instead of index.html.
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/") || req.path.startsWith("/webhooks/")) {
+    return res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
+  }
+  next();
+});
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "../public/index.html")));
 
-app.listen(PORT, () => console.log(`✅ LandingAI running on http://localhost:${PORT}`));
+// ===== Global error handler =====
+// Must have exactly 4 arguments so Express recognises it as an error handler.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("Unhandled server error:", err);
+  if (req.path.startsWith("/api/") || req.path.startsWith("/webhooks/")) {
+    return res.status(500).json({ error: "حدث خطأ داخلي غير متوقع" });
+  }
+  res.status(500).sendFile(path.join(__dirname, "../public/index.html"));
+});
+
+// ===== Graceful shutdown =====
+const server = app.listen(PORT, () =>
+  console.log(`LandingAI running on http://localhost:${PORT}`)
+);
+
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received — shutting down gracefully...`);
+  server.close(() => {
+    console.log("HTTP server closed");
+    process.exit(0);
+  });
+  // Force-kill if close takes longer than 10 s
+  setTimeout(() => {
+    console.error("Forced shutdown after timeout");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"));

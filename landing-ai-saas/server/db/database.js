@@ -189,6 +189,13 @@ function updatePageContent(id, content) {
   return getPageById(id);
 }
 
+// Close the SQLite connection cleanly when the process exits so that
+// WAL checkpointing completes and no journal files are left behind.
+// Using 'exit' (synchronous) because better-sqlite3 is synchronous too.
+process.on("exit", () => {
+  try { db.close(); } catch { /* already closed or never opened */ }
+});
+
 module.exports = {
   createUser, getUserByEmail, getUserById, updateUserPassword,
   resetUsageIfNeeded, incrementUsage, updatePlan,
