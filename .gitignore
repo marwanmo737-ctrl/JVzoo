@@ -1,0 +1,21 @@
+# Uploaded archives — extracted content is already committed
+*.zip
+*.tar.gz
+*.rar
+
+# Vercel internal files
+.vercel/
+
+# Environment variables — never commit real secrets
+.env
+.env.local
+.env.development.local
+.env.production.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
